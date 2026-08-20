@@ -47,10 +47,10 @@ Measured on the development instance while writing this:
 
 | | |
 |---|---|
-| Tick rows | **2,183,172** real aggregated trades across 6 daily partitions (220 MB) |
+| Tick rows | **2,904,098** real aggregated trades across 6 daily partitions (422 MB) |
 | OHLCV candles | **4,730,469** real 1-minute candles, 10 symbols × 1 year |
 | Live ingestion lag | 0.3 s from exchange event time to local write |
-| Tests | 51 passing |
+| Tests | 53 passing |
 | Adversarial attacks blocked | 22 / 22 |
 
 ---
@@ -398,7 +398,7 @@ sql/             001 schema+partitioning · 002 read-only role · 003 seed
 scripts/         bootstrap_db · migrate · redteam
 bench/           explain.py — index benchmark
 evals/           questions.yaml + run.py
-tests/           51 tests
+tests/           53 tests
 frontend/        React + Vite + lightweight-charts
 ops/             prometheus.yml + provisioned Grafana dashboard (17 panels)
 ```
@@ -414,7 +414,7 @@ refuses to re-run a file whose contents changed after being applied.
 ## Operations
 
 ```bash
-make test        # 51 tests against real Postgres and Redis
+make test        # 53 tests against real Postgres and Redis
 make redteam     # 22 adversarial attacks, no API key needed
 make bench       # EXPLAIN ANALYZE, with and without the index
 make evals       # AI eval suite (needs ANTHROPIC_API_KEY)

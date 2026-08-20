@@ -258,7 +258,10 @@ async def compare_symbols(
             MIN(low)                                        AS low,
             SUM(volume)                                     AS volume,
             SUM(quote_volume)                               AS quote_volume,
-            ROUND(COALESCE(STDDEV_POP(ret), 0) * SQRT(1440) * 100, 4) AS daily_vol_pct
+            -- SQRT(1440) is double precision, and numeric * double is double,
+            -- which has no two-argument ROUND. Keeping the whole expression in
+            -- NUMERIC preserves exactness and keeps ROUND(value, scale) valid.
+            ROUND(COALESCE(STDDEV_POP(ret), 0) * SQRT(1440::NUMERIC) * 100, 4) AS daily_vol_pct
         FROM rets
         GROUP BY symbol
         ORDER BY symbol

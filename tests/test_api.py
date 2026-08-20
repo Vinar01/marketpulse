@@ -138,3 +138,23 @@ async def test_tool_surface_is_published(client):
     body = r.json()
     assert {t["name"] for t in body["tools"]} >= {"get_latest_price", "compare_symbols"}
     assert body["guardrails"]["sql_generation"].startswith("disabled")
+
+
+async def test_market_summary_ranks_symbols(client):
+    """Regression: the volatility expression mixed NUMERIC with the double
+    precision returned by SQRT(), and ROUND(double, int) does not exist."""
+    r = await client.get("/api/v1/market/summary", params={"hours": 6}, headers=KEY)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "window" in body
+    for row in body["symbols"]:
+        assert {"symbol", "pct_change", "daily_vol_pct", "volume"} <= set(row)
+
+
+async def test_market_summary_respects_the_window_cap(client):
+    r = await client.get(
+        "/api/v1/market/summary",
+        params={"start": "1970-01-01T00:00:00Z", "end": "2030-01-01T00:00:00Z"},
+        headers=KEY,
+    )
+    assert r.status_code == 422
