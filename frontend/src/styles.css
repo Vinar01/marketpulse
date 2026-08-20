@@ -1,0 +1,107 @@
+:root {
+  --bg: #0b0e14;
+  --panel: #12161f;
+  --panel-2: #171c27;
+  --border: #232936;
+  --text: #e6e9ef;
+  --muted: #8b93a7;
+  --up: #26a69a;
+  --down: #ef5350;
+  --accent: #5b8def;
+  --warn: #e0a34a;
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+header.top {
+  display: flex; align-items: baseline; gap: 14px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+header.top h1 { font-size: 19px; margin: 0; letter-spacing: -0.2px; }
+header.top .sub { color: var(--muted); font-size: 12px; }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.dot.on { background: var(--up); box-shadow: 0 0 8px var(--up); }
+.dot.off { background: var(--down); }
+.dot.warn { background: var(--warn); }
+
+.ticker { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 18px; }
+.ticker .tile {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; min-width: 148px; cursor: pointer; transition: border-color .15s;
+}
+.ticker .tile:hover { border-color: var(--accent); }
+.ticker .tile.active { border-color: var(--accent); background: var(--panel-2); }
+.ticker .sym { color: var(--muted); font-size: 11px; letter-spacing: .06em; }
+.ticker .px { font-size: 17px; font-variant-numeric: tabular-nums; margin-top: 3px; }
+.ticker .px.up { color: var(--up); }
+.ticker .px.down { color: var(--down); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin-bottom: 18px;
+}
+.panel h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); margin: 0 0 12px;
+}
+
+.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+select, input, button, textarea {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px; font-size: 13px; font-family: inherit;
+}
+button { cursor: pointer; transition: background .15s, border-color .15s; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.range-btn.active { border-color: var(--accent); color: var(--accent); }
+
+.chart { height: 380px; width: 100%; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+th:first-child, td:first-child { text-align: left; }
+td.up { color: var(--up); } td.down { color: var(--down); }
+
+.kv { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+.kv .k { color: var(--muted); }
+.kv .v { font-variant-numeric: tabular-nums; }
+
+.ask textarea { width: 100%; min-height: 66px; resize: vertical; }
+.answer {
+  background: var(--panel-2); border-left: 2px solid var(--accent);
+  padding: 12px; border-radius: 4px; margin-top: 12px; white-space: pre-wrap; line-height: 1.55;
+}
+.trace { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.trace .call {
+  padding: 5px 8px; background: var(--panel-2); border-radius: 4px;
+  margin-bottom: 4px; border-left: 2px solid var(--up); font-family: ui-monospace, monospace;
+}
+.trace .call.err { border-left-color: var(--down); color: var(--down); }
+.examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.examples button { font-size: 11px; padding: 4px 8px; color: var(--muted); }
+
+.error {
+  color: var(--down); background: rgba(239, 83, 80, .08);
+  border: 1px solid rgba(239, 83, 80, .25); border-radius: 6px;
+  padding: 9px 12px; font-size: 13px; margin-top: 10px;
+}
+.muted { color: var(--muted); }
+.small { font-size: 12px; }

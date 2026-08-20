@@ -1,0 +1,138 @@
+# Full stack, one command: docker compose up -d
+#
+# Services are split the way they would be in production: the API and the
+# ingestion worker are separate processes with separate scaling and separate
+# failure domains. A crash-looping ingester must not take the dashboard down,
+# and scaling the API to handle traffic must not open a second exchange
+# connection and double-write every tick.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: marketpulse
+      POSTGRES_PASSWORD: marketpulse
+      POSTGRES_DB: marketpulse
+      # Deterministic partition boundaries regardless of host timezone.
+      TZ: UTC
+      PGTZ: UTC
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=100
+      # This workload is append-heavy: raise the WAL budget so checkpoints are
+      # spread out instead of stalling every batch insert.
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - checkpoint_completion_target=0.9
+      # Log anything slower than 500ms so slow queries surface in development.
+      - -c
+      - log_min_duration_statement=500
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketpulse -d marketpulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # Cache and rate-limit counters only -- nothing here needs to survive a
+    # restart, so persistence is off and memory is capped with LRU eviction.
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: python scripts/migrate.py
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://marketpulse:marketpulse@postgres:5432/marketpulse
+      DATABASE_URL_RO: postgresql+asyncpg://marketpulse_ai_ro:marketpulse_ai_ro@postgres:5432/marketpulse
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://marketpulse:marketpulse@postgres:5432/marketpulse
+      DATABASE_URL_RO: postgresql+asyncpg://marketpulse_ai_ro:marketpulse_ai_ro@postgres:5432/marketpulse
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: python -m app.ingest.worker
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://marketpulse:marketpulse@postgres:5432/marketpulse
+      REDIS_URL: redis://redis:6379/0
+    ports: ["9101:9101"]      # worker metrics
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+    # Exactly one. A second worker would open a second exchange connection and
+    # every tick would be written twice (deduplicated by the primary key, but
+    # at double the write cost for no benefit).
+    deploy:
+      replicas: 1
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8000
+        VITE_API_KEY: demo-key-public
+    ports: ["5173:80"]
+    depends_on: [api]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./ops/grafana:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:

@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    # Real Postgres and Redis, not mocks. The interesting parts of this codebase
+    # -- partitioning, the read-only role, keyset pagination -- do not exist in
+    # a mock, so testing against one would test nothing that matters.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: marketpulse
+          POSTGRES_PASSWORD: marketpulse
+          POSTGRES_DB: marketpulse
+          TZ: UTC
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U marketpulse"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://marketpulse:marketpulse@localhost:5432/marketpulse
+      DATABASE_URL_RO: postgresql+asyncpg://marketpulse_ai_ro:marketpulse_ai_ro@localhost:5432/marketpulse
+      REDIS_URL: redis://localhost:6379/0
+      ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+
+      - run: pip install -e ".[dev]"
+      - run: python scripts/migrate.py
+      - run: ruff check app tests scripts bench evals
+      - run: pytest tests/ -v
+
+      # The guardrail suite runs on every commit and needs no API key. If a
+      # change ever weakens the AI layer's isolation, CI fails here.
+      - run: python -m scripts.redteam
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "20", cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - run: cd frontend && npm install
+      - run: cd frontend && npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t marketpulse:ci .
+      - run: docker build -t marketpulse-frontend:ci ./frontend

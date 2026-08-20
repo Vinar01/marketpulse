@@ -1,0 +1,90 @@
+# Render blueprint — the fastest path to a public deployment.
+#
+#   1. Push this repo to GitHub.
+#   2. Render dashboard -> New -> Blueprint -> pick the repo.
+#   3. Set ANTHROPIC_API_KEY on the marketpulse-api service (the only secret
+#      that is not generated for you).
+#
+# Everything else -- Postgres, Redis, the migration job, the worker and the
+# static dashboard -- is provisioned from this file.
+
+databases:
+  - name: marketpulse-db
+    databaseName: marketpulse
+    user: marketpulse
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  # ---- Redis ----
+  - type: keyvalue
+    name: marketpulse-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []          # private network only
+
+  # ---- API ----
+  - type: web
+    name: marketpulse-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health/live
+    # Migrations run on every deploy, before the new instance takes traffic.
+    # They are idempotent and checksum-guarded, so a redeploy is a no-op.
+    preDeployCommand: python scripts/migrate.py
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: {name: marketpulse-db, property: connectionString}
+      - key: DATABASE_URL_RO
+        fromDatabase: {name: marketpulse-db, property: connectionString}
+      - key: REDIS_URL
+        fromService: {name: marketpulse-redis, type: keyvalue, property: connectionString}
+      - key: ANTHROPIC_API_KEY
+        sync: false          # set this by hand in the dashboard
+      - key: API_KEYS
+        generateValue: false
+        value: "demo-key-public:public,demo-key-admin:admin"
+      - key: ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SYMBOLS
+        value: BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT
+      - key: CORS_ORIGINS
+        value: https://marketpulse-dashboard.onrender.com
+
+  # ---- Ingestion worker ----
+  # A separate service, not a thread inside the API: it must stay at exactly one
+  # instance while the API scales freely, and its crashes must not affect reads.
+  - type: worker
+    name: marketpulse-ingest
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m app.ingest.worker
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: {name: marketpulse-db, property: connectionString}
+      - key: REDIS_URL
+        fromService: {name: marketpulse-redis, type: keyvalue, property: connectionString}
+      - key: ENV
+        value: production
+      - key: SYMBOLS
+        value: BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT
+
+  # ---- Dashboard ----
+  - type: web
+    name: marketpulse-dashboard
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://marketpulse-api.onrender.com
+      - key: VITE_API_KEY
+        value: demo-key-public
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
