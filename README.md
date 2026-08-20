@@ -343,6 +343,13 @@ cannot be computed the same way twice is not a metric.
 ANTHROPIC_API_KEY=sk-ant-... make evals
 ```
 
+**Cost.** The Anthropic API is pay-as-you-go; there is no free tier, and a
+claude.ai subscription does not include API access. On the default
+`claude-opus-5` a question costs roughly $0.03-0.07, so the 31-question suite is
+about $1-2 per run. `AI_MODEL` is configurable: switching to
+`claude-haiku-4-5` cuts that by roughly 5x and is more than adequate for tool
+selection on a surface this small.
+
 Writes a JSON report with pass rate by group, median and p95 latency, and cost
 per question.
 
